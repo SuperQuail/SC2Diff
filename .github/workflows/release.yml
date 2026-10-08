@@ -1,7 +1,8 @@
 name: release
 
 # Tagging on the release branch publishes a packaged snapshot.
-# Release notes are taken from docs/release-notes/<tag>.md when present.
+# Release notes come from docs/release-notes/<tag>.md; the tag must match the VERSION file.
+# Tags that look like a pre-release (0.1.0a1, -alpha.1, -rc2, ...) are marked as such.
 on:
   push:
     tags: ["v*"]
@@ -19,6 +20,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: tag must match the VERSION file
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = (Get-Content VERSION -Raw).Trim()
+          if ($tag -ne "v$ver") {
+            Write-Error "tag '$tag' does not match VERSION ('$ver') -- bump one of them"
+            exit 1
+          }
+          Write-Output "version $ver confirmed against tag $tag"
+
       - name: tests must pass before anything is published
         run: |
           python tools/test_selftest.py
@@ -31,7 +43,7 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $out = "sc2diff-$tag"
           New-Item -ItemType Directory -Force $out | Out-Null
-          Copy-Item README.md,CONTRIBUTING.md,LICENSE -Destination $out
+          Copy-Item README.md,CONTRIBUTING.md,LICENSE,VERSION -Destination $out
           Copy-Item tools,docs,research -Destination $out -Recurse
           Get-ChildItem $out -Recurse -Include *.exe,*.obj,*.lib,*.dll | Remove-Item -Force -ErrorAction SilentlyContinue
           Get-ChildItem $out -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
@@ -43,7 +55,9 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           $note = "docs/release-notes/$tag.md"
-          if (Test-Path $note) { Copy-Item $note notes.md } else { "Release $tag" | Out-File -Encoding utf8 notes.md }
+          if (Test-Path $note) { Copy-Item $note notes.md }
+          else { Write-Error "missing docs/release-notes/$tag.md"; exit 1 }
+          Get-Content notes.md -TotalCount 3
 
       - name: publish
         shell: pwsh
@@ -51,4 +65,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ github.ref_name }}"
-          gh release create $tag --title $tag --notes-file notes.md --generate-notes (Get-ChildItem sc2diff-*.zip).FullName
+          # 0.1.0a1 / 0.1.0b2 / 1.0.0-rc1 / anything with a dash is a pre-release
+          $isPre = ($tag -match '(a|b|rc)[0-9]+$') -or ($tag -match '-')
+          $ghArgs = @('release', 'create', $tag, '--title', $tag, '--notes-file', 'notes.md')
+          if ($isPre) { $ghArgs += '--prerelease'; Write-Output "publishing $tag as a PRE-RELEASE" }
+          else { Write-Output "publishing $tag as a full release" }
+          $ghArgs += (Get-ChildItem sc2diff-*.zip).FullName
+          & gh @ghArgs
