@@ -42,3 +42,23 @@ jobs:
 
       - name: repack fidelity on real samples (skips when the samples are absent)
         run: python tools/test_rebuild.py
+
+  rust:
+    name: rust (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: build and test the Rust product
+        run: |
+          cargo build --release
+          cargo test --release
+      - name: the built CLI must round-trip a document
+        shell: pwsh
+        run: |
+          python -c "import sys;sys.path.insert(0,'tools');import fixture;fixture.build('testdata/fixture.SC2Map')"
+          New-Item -ItemType Directory -Force $env:RUNNER_TEMP/rsr | Out-Null
+          ./target/release/sc2diff.exe -C $env:RUNNER_TEMP/rsr init testdata/fixture.SC2Map
+          ./target/release/sc2diff.exe -C $env:RUNNER_TEMP/rsr commit -m import
+          ./target/release/sc2diff.exe -C $env:RUNNER_TEMP/rsr pack $env:RUNNER_TEMP/rs_packed.SC2Map
+          ./target/release/sc2diff.exe verify $env:RUNNER_TEMP/rs_packed.SC2Map

@@ -37,6 +37,11 @@ jobs:
           python tools/test_git_parity.py --source testdata/fixture.SC2Map
           python tools/test_bundle.py --source testdata/fixture.SC2Map
 
+      - name: build the Rust CLI (the release ships a compiled binary)
+        run: |
+          cargo build --release
+          cargo test --release
+
       - name: assemble the distributable
         shell: pwsh
         run: |
@@ -44,7 +49,8 @@ jobs:
           $out = "sc2diff-$tag"
           New-Item -ItemType Directory -Force $out | Out-Null
           Copy-Item README.md,CONTRIBUTING.md,LICENSE,VERSION -Destination $out
-          Copy-Item tools,docs,research -Destination $out -Recurse
+          Copy-Item tools,docs,research,src,Cargo.toml,Cargo.lock -Destination $out -Recurse
+          Copy-Item target/release/sc2diff.exe -Destination $out
           Get-ChildItem $out -Recurse -Include *.exe,*.obj,*.lib,*.dll | Remove-Item -Force -ErrorAction SilentlyContinue
           Get-ChildItem $out -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
@@ -71,4 +77,5 @@ jobs:
           if ($isPre) { $ghArgs += '--prerelease'; Write-Output "publishing $tag as a PRE-RELEASE" }
           else { Write-Output "publishing $tag as a full release" }
           $ghArgs += (Get-ChildItem sc2diff-*.zip).FullName
+          $ghArgs += "sc2diff-$tag/sc2diff.exe"
           & gh @ghArgs
