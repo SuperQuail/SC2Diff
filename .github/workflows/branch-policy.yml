@@ -1,0 +1,51 @@
+name: branch-policy
+
+# Enforces the agreed flow:  feat/* -> dev -> main -> release -> tag
+# Opening a PR against the wrong base branch fails immediately.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  flow:
+    name: branch flow
+    runs-on: ubuntu-latest
+    steps:
+      - name: only dev may enter main, only main may enter release
+        shell: bash
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          echo "PR: $HEAD -> $BASE"
+          fail() { echo "::error::$1"; exit 1; }
+          case "$BASE" in
+            dev)
+              case "$HEAD" in
+                dev|main|release) fail "PRs into dev must come from a topic branch (feat/*, fix/*, chore/*, docs/*, refactor/*, test/*, ci/*)" ;;
+              esac
+              ;;
+            main)
+              [ "$HEAD" = "dev" ] || fail "only dev may be merged into main (got '$HEAD')"
+              ;;
+            release)
+              [ "$HEAD" = "main" ] || fail "only main may be merged into release (got '$HEAD')"
+              ;;
+            *)
+              echo "::notice::base branch '$BASE' is outside the protected flow"
+              ;;
+          esac
+          echo "branch flow OK"
+
+      - name: PR title follows Conventional Commits
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "title: $TITLE"
+          if printf '%s' "$TITLE" | grep -Eq '^(feat|fix|chore|refactor|docs|test|build|ci|perf)(\([a-z0-9_-]+\))?!?: .+'; then
+            echo "conventional commit OK"
+          else
+            echo "::error::PR title must look like: feat(mpq): short description"
+            exit 1
+          fi

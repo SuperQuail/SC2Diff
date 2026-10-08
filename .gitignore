@@ -1,0 +1,31 @@
+# --------------------------------------------------------------------------- #
+# Never commit copyrighted or third-party material.
+#   testdata/   community campaign packages + unpacked map contents (Blizzard and
+#               community assets); also where generated fixtures and scratch repos land
+#   reference/  cloned third-party sources (StormLib) used only for cross-checking
+# --------------------------------------------------------------------------- #
+testdata/
+reference/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Native build artefacts (the StormLib cross-check builds one on demand)
+*.obj
+*.exe
+*.lib
+*.dll
+*.pdb
+*.ilk
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store

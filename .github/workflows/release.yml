@@ -1,0 +1,54 @@
+name: release
+
+# Tagging on the release branch publishes a packaged snapshot.
+# Release notes are taken from docs/release-notes/<tag>.md when present.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: tests then publish
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: tests must pass before anything is published
+        run: |
+          python tools/test_selftest.py
+          python tools/test_git_parity.py --source testdata/fixture.SC2Map
+          python tools/test_bundle.py --source testdata/fixture.SC2Map
+
+      - name: assemble the distributable
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $out = "sc2diff-$tag"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item README.md,CONTRIBUTING.md,LICENSE -Destination $out
+          Copy-Item tools,docs,research -Destination $out -Recurse
+          Get-ChildItem $out -Recurse -Include *.exe,*.obj,*.lib,*.dll | Remove-Item -Force -ErrorAction SilentlyContinue
+          Get-ChildItem $out -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
+          Get-ChildItem "$out.zip" | Select-Object Name,Length
+
+      - name: pick the release notes
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $note = "docs/release-notes/$tag.md"
+          if (Test-Path $note) { Copy-Item $note notes.md } else { "Release $tag" | Out-File -Encoding utf8 notes.md }
+
+      - name: publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release create $tag --title $tag --notes-file notes.md --generate-notes (Get-ChildItem sc2diff-*.zip).FullName

@@ -1,0 +1,13 @@
+# Normalise line endings, matching the organisation's other repositories.
+* text=auto eol=lf
+
+# Binary-ish assets that must never be line-ending munged
+*.png binary
+*.jpg binary
+*.ico binary
+*.exe binary
+*.lib binary
+*.obj binary
+*.dll binary
+*.sc2map binary
+*.sc2mod binary

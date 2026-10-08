@@ -1,0 +1,44 @@
+name: ci
+
+# Runs on the protected branches and on every PR that targets one of them.
+# The suites are self-contained: they build a synthetic document with tools/fixture.py,
+# so CI needs neither the game nor the copyrighted community samples.
+on:
+  push:
+    branches: [dev, main, release]
+  pull_request:
+    branches: [dev, main, release]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests (windows)
+    # The product targets Windows (StarCraft II, the Galaxy Editor, StormLib).
+    # The container layer is pure Python and should be portable, but that is not
+    # yet verified, so CI does not claim it.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: self-contained acceptance (container + repo + patch exchange)
+        run: python tools/test_selftest.py
+
+      - name: CLI suite (git-shaped commands)
+        run: python tools/test_git_parity.py --source testdata/fixture.SC2Map
+
+      - name: patch-bundle exchange suite
+        run: python tools/test_bundle.py --source testdata/fixture.SC2Map
+
+      - name: container oracle on real samples (skips when the samples are absent)
+        run: python tools/verify_roundtrip.py
+
+      - name: repack fidelity on real samples (skips when the samples are absent)
+        run: python tools/test_rebuild.py
