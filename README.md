@@ -8,6 +8,10 @@
 
 状态：**本地闭环已完成并通过验收**；协作（合并 / 远端）见 [docs/collaboration-plan.md](docs/collaboration-plan.md)。
 
+> **分工**：`src/` 是 Rust 产品（编译出单文件 `sc2diff.exe`），`tools/` 是 Python 技术验证与判据
+> （差分测试的 oracle）。Python 侧逐字节验证出格式事实，Rust 侧落地实现。
+> 构建：`cargo build --release`，测试：`cargo test --release`。
+
 > 分支约定：**feat/* -> dev -> main -> release -> tag**，任何改动都走 PR。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ---
