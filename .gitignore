@@ -15,6 +15,9 @@ venv/
 *.egg-info/
 .pytest_cache/
 
+# Rust build output
+target/
+
 # Native build artefacts (the StormLib cross-check builds one on demand)
 *.obj
 *.exe
