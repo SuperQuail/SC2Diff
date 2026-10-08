@@ -1,9 +1,14 @@
 # SC2Diff — 星际争霸 II 地图/依赖的 diff 与版本控制
 
+[![ci](https://github.com/SuperQuail/SC2Diff/actions/workflows/ci.yml/badge.svg)](https://github.com/SuperQuail/SC2Diff/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 对 .SC2Map / .SC2Mod（本质是 MPQ 归档）做**语义 diff** 与 **git 式版本控制**，
 并把结果**重新封装**回可被银河编辑器正常打开的归档。
 
 状态：**本地闭环已完成并通过验收**；协作（合并 / 远端）见 [docs/collaboration-plan.md](docs/collaboration-plan.md)。
+
+> 分支约定：**feat/* -> dev -> main -> release -> tag**，任何改动都走 PR。详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ---
 
