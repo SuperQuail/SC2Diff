@@ -51,7 +51,9 @@ jobs:
           Copy-Item README.md,CONTRIBUTING.md,LICENSE,VERSION -Destination $out
           Copy-Item tools,docs,research,src,Cargo.toml,Cargo.lock -Destination $out -Recurse
           Copy-Item target/release/sc2diff.exe -Destination $out
-          Get-ChildItem $out -Recurse -Include *.exe,*.obj,*.lib,*.dll | Remove-Item -Force -ErrorAction SilentlyContinue
+          # strip build leftovers from the copied sources, but never the binary we ship
+          Get-ChildItem "$out/tools","$out/src" -Recurse -Include *.exe,*.obj,*.lib,*.dll -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+          Get-Item "$out/sc2diff.exe" | Select-Object Name,Length
           Get-ChildItem $out -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           Get-ChildItem "$out.zip" | Select-Object Name,Length
