@@ -90,11 +90,33 @@
 
 ---
 
-## 6. 分支保护（仓库管理员执行一次）
+## 6. 分支保护（已在本仓库启用）
 
-    gh api -X PUT repos/SuperQuail/SC2Diff/branches/main/protection \
-      -F required_pull_request_reviews.required_approving_review_count=1 \
-      -F enforce_admins=true -F required_status_checks=null \
-      -F restrictions= -F allow_force_pushes=false -F allow_deletions=false
+main 与 release 已启用保护，**任何改动都必须经 PR**，且必须通过两项检查：
+`tests (windows)` 与 `branch flow`（strict，即分支必须与目标分支同步后才能合并）。
+同时：禁止强推、禁止删除分支、必须解决所有评论。
 
-release 分支同理。dev 建议只要求 CI 通过、允许直接推（保持迭代速度）。
+实际生效的设置：
+
+    required_status_checks : strict=true, contexts=[tests (windows), branch flow]
+    required_pull_request_reviews : required_approving_review_count=0
+    enforce_admins : true
+    allow_force_pushes : false
+    allow_deletions : false
+
+审批数设为 0 是刻意的：单人维护时不会被锁死，但**走 PR + 过 CI** 这两条依然强制。
+团队变大后把它改成 1 即可。
+
+复现/调整：
+
+    gh api -X PUT repos/SuperQuail/SC2Diff/branches/main/protection --input protection.json
+
+其中 protection.json 就是上面那份设置。
+
+**dev 不设保护**，允许直接推送以保持迭代速度；但按约定仍建议走 PR。
+
+实测这两道闸门确实生效：
+
+- 直接 `git push origin <branch>:main` -> 被拒：`GH006: Protected branch update failed` /
+  `Changes must be made through a pull request.`
+- PR 标题不符合 Conventional Commits -> `branch flow` 检查 2 秒内失败。
