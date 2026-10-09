@@ -5,7 +5,7 @@
 //! probing continues on a mismatch.
 
 use super::*;
-use crate::mpq::crypto::{bits_get, bits_set, decrypt, encrypt, hash_string, jenkins_name_hash};
+use crate::mpq::crypto::{bits_set, decrypt, encrypt, hash_string, jenkins_name_hash};
 
 pub const BET_TABLE_SIZE_I: usize = 0;
 pub const BET_ENTRY_COUNT_I: usize = 1;
@@ -85,33 +85,6 @@ impl HetTable {
         out.extend_from_slice(&encrypt(&body, hash_string("(hash table)", HASH_FILE_KEY)));
         out
     }
-
-    /// First candidate block index for a name (top-8-bit match only).
-    pub fn candidate_index(&self, name: &str) -> u32 {
-        if self.entry_count == 0 || self.total_count == 0 {
-            return HASH_ENTRY_FREE;
-        }
-        let want = jenkins_name_hash(name, self.name_hash_bit_size);
-        let name_hash1 = ((want >> (self.name_hash_bit_size - 8)) & 0xFF) as u8;
-        let start = (want % self.total_count as u64) as u32;
-        let mut index = start;
-        loop {
-            let slot = self.name_hashes[index as usize];
-            if slot == HET_ENTRY_FREE {
-                return HASH_ENTRY_FREE;
-            }
-            if slot == name_hash1 {
-                let bitpos = (self.index_size_total * index) as usize;
-                if (bitpos + self.index_size as usize + 7) / 8 <= self.index_bits.len() {
-                    return bits_get(&self.index_bits, bitpos, self.index_size) as u32;
-                }
-            }
-            index = (index + 1) % self.total_count;
-            if index == start {
-                return HASH_ENTRY_FREE;
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -123,8 +96,6 @@ pub struct BetTable {
 }
 
 impl BetTable {
-    pub fn get(&self, i: usize) -> u32 { self.head[i] }
-
     pub fn parse(data: &[u8]) -> Result<Self> {
         if data.len() < 12 || &data[0..4] != BET_SIG {
             return Err(MpqError("not a BET table".into()));
@@ -167,18 +138,6 @@ impl BetTable {
         out.extend_from_slice(&(body.len() as u32).to_le_bytes());
         out.extend_from_slice(&encrypt(&body, hash_string("(block table)", HASH_FILE_KEY)));
         out
-    }
-
-    /// (file_pos, file_size, cmp_size, flag_index) for entry i.
-    pub fn entry(&self, i: usize) -> (u64, u64, u64, u64) {
-        let base = (self.head[BET_TABLE_ENTRY_SIZE_I] as usize) * i;
-        let g = |idx: usize, cnt: usize| bits_get(&self.file_bits, base + idx, cnt as u32);
-        (
-            g(self.head[BET_BIT_INDEX_FILEPOS_I] as usize, self.head[BET_BIT_COUNT_FILEPOS_I] as usize),
-            g(self.head[BET_BIT_INDEX_FILESIZE_I] as usize, self.head[BET_BIT_COUNT_FILESIZE_I] as usize),
-            g(self.head[BET_BIT_INDEX_CMPSIZE_I] as usize, self.head[BET_BIT_COUNT_CMPSIZE_I] as usize),
-            g(self.head[BET_BIT_INDEX_FLAGINDEX_I] as usize, self.head[BET_BIT_COUNT_FLAGINDEX_I] as usize),
-        )
     }
 }
 

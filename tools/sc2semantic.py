@@ -18,8 +18,6 @@ Models are plain dicts, so diffing is a dict comparison and ignores ordering.
 from __future__ import annotations
 
 import hashlib
-import os
-import re
 import xml.etree.ElementTree as ET
 
 # --------------------------------------------------------------------------- #

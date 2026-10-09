@@ -115,7 +115,7 @@ fn print_diff(changes: &[(String, semantic::Change)]) {
         return;
     }
     for (name, c) in changes {
-        println!("  {:<58} {}", name, c.summary(name));
+        println!("  {:<58} {}", name, c.summary());
     }
     println!();
     for (name, c) in changes.iter().take(8) {
@@ -217,7 +217,7 @@ pub fn run(cli: Cli) -> Result<i32> {
                 print_diff(&repo.diff_trees(&ta, &repo.scan()?)?);
             } else {
                 println!("diff working tree vs index");
-                print_diff(&repo.diff_working(false)?);
+                print_diff(&repo.diff_working()?);
             }
             Ok(0)
         }
@@ -323,7 +323,7 @@ pub fn run(cli: Cli) -> Result<i32> {
             }
             match name {
                 None => { for t in repo.tags() { println!("{t}"); } }
-                Some(n) => { let sha = repo.create_tag(n, rev.as_deref(), false)?; println!("Tagged {n} at {sha}"); }
+                Some(n) => { let sha = repo.create_tag(n, rev.as_deref())?; println!("Tagged {n} at {sha}"); }
             }
             Ok(0)
         }

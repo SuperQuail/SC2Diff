@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Compare StormLib's extraction of an archive against our own reader."""
-import sys, os, filecmp
+import sys, os
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.path.insert(0, 'tools')
-from sc2mpq import Document, BOOKKEEPING
+from sc2mpq import Document
 
 def compare(archive, extracted_dir, label):
     doc = Document.open(archive)

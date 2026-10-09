@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Patch-bundle exchange: the workflow that replaces a remote, with no server involved."""
-import os, re, shutil, subprocess, sys, time
+import os, shutil, subprocess, sys
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.path.insert(0, 'tools')
 import sc2mpq, sc2repo
