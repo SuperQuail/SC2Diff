@@ -6,14 +6,13 @@ Everything the diff/repack pipeline needs from the MPQ container:
   * header, formats 1..4  (SC2 5.x writes a 208-byte header with formatVersion=3)
   * classic hash table + block table (encrypted with the standard keys)
   * HET table 'HET\\x1a' -- bit-packed; 12 plaintext bytes then an encrypted body
-  * BET table 'BET\\x1a' -- ditto, with a big-endian flag array
+  * BET table 'BET\\x1a' -- ditto, with a little-endian flag array
   * (attributes) version 100 -- per-block CRC32 / FILETIME / MD5
   * (listfile) / (signature)
-  * multi-compression: zlib 0x02, pkware 0x08, bzip2 0x10, lzma 0x12, sparse 0x20
+  * compression: zlib 0x02, bzip2 0x10 (single-unit and sector layouts)
 
-The oracle used throughout is byte-exact round-trip: parse a real archive, regenerate
-HET / BET / (attributes) from the parsed model, and compare with what is on disk.  If
-that holds for untouched data it holds for changed data too.
+Self-check: parse an archive, regenerate HET / BET / (attributes) from the parsed model,
+and compare with the bytes on disk.
 
 Bit arrays are LSB-first: bit k is bit (k % 8) of byte (k // 8); multi-bit values are
 little-endian over that bit order (StormLib TMPQBits::GetBits/SetBits).
@@ -361,7 +360,7 @@ class BetTable:
                            self.bit_count_flag_index, self.bit_count_unknown,
                            self.bit_total_name_hash2, self.bit_extra_name_hash2, self.bit_count_name_hash2,
                            self.name_hash_array_size, self.flag_count)
-        # measured: SC2 stores the flag array little-endian
+        # SC2 stores the flag array little-endian
         flags = b"".join(struct.pack("<I", f) for f in self.flags)
         return head + flags + bytes(self.file_bits) + bytes(self.name_hash_bits)
 
@@ -992,16 +991,12 @@ def build_document(entries: list, dest: str, *, hash_count: int = None, block_sh
     # rawChunkSize stays 0.  SC2's own writer stamps 16384 here even though the header
     # claims formatVersion 3, and that is what enables Blizzard's System_Mopaq raw-chunk
     # MD5 verification path: any content edit is then rejected with e_fileCorrupt even when
-    # (attributes) CRC32/MD5 are correct.  A genuine v3 archive has no raw-chunk MD5s, so
-    # 0 is both correct and the setting the editor accepts.  Measured A/B: identical archive
-    # with 16384 -> crash on the edited file; with 0 -> loads.
+    # (attributes) CRC32/MD5 are correct.
     struct.pack_into("<I", header, 108, raw_chunk_size)       # rawChunkSize (0 = v3-style, editor-accepted)
 
-    # The v4 digest block (0x70..0xCF).  This is not decoration: StormLib refuses a header
-    # whose own hash does not match, with the comment "Apparently, Starcraft II only accepts
-    # MPQ headers where the MPQ header hash matches".  Layout measured on real documents:
-    #   0x70 block table, 0x80 hash table, 0x90 hi-block table (zero when absent),
-    #   0xA0 BET, 0xB0 HET, 0xC0 md5 of the first 0xC0 bytes of the header itself.
+    # Digest block 0x70..0xCF: 0x70 block table, 0x80 hash table, 0x90 hi-block table (zero
+    # when absent), 0xA0 BET, 0xB0 HET, 0xC0 md5 of the first 0xC0 bytes of the header.
+    # See docs/DEV_FORMAT.md section 2.
     header[0x70:0x80] = hashlib.md5(block_blob).digest()
     header[0x80:0x90] = hashlib.md5(hash_blob).digest()
     header[0x90:0xA0] = b"\x00" * 16

@@ -13,11 +13,9 @@ Repository layout (git-like on purpose, so that agent habits transfer):
       index.json           the staging area (and the stat cache that makes status fast)
 
 The index doubles as a stat cache: every entry records (sha, mtime_ns, size), so an
-unchanged component is never re-read.  That is the difference between a status that
-scales and one that re-hashes the whole document on every call.
+unchanged component is never re-read.
 
-Diffs are semantic (sc2semantic), so a component the editor rewrote wholesale still
-diffs as the two entities that actually changed.
+Diffs are semantic (sc2semantic).
 """
 from __future__ import annotations
 
@@ -927,10 +925,8 @@ def _read_all(path: str) -> bytes:
 def _index_entry_from_tree(repo: Repo, name: str, sha: str, trust_stat: bool = False) -> dict:
     """Index entry for a name taken from a tree.
 
-    trust_stat must only be True right after the working file was written *from* that blob
-    (checkout).  Unstaging is the opposite case: the file on disk may be anything, and
-    recording its current stat against the HEAD digest would make the next scan believe the
-    modified file is clean.  When unsure we leave the stat empty, which costs one re-hash.
+    trust_stat may be True only right after the working file was written from that blob
+    (checkout).  Otherwise the stat is left empty so the next scan re-hashes the file.
     """
     full = repo.workpath(name)
     ent = {"sha": sha, "mtime_ns": None, "size": None}

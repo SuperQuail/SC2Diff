@@ -147,35 +147,17 @@ impl Archive {
                 block_index: u32at(&plain, o + 12),
             });
         }
-        let ok = v.iter().all(|e| e.free() || e.block_index < self.block_count) && v.iter().any(|e| e.free());
-        if ok { v } else {
-            (0..self.hash_count as usize).map(|i| {
-                let o = i * 16;
-                HashEntry {
-                    hash_a: u32at(blob, o), hash_b: u32at(blob, o + 4),
-                    locale: u16at(blob, o + 8), platform: u16at(blob, o + 10),
-                    block_index: u32at(blob, o + 12),
-                }
-            }).collect()
-        }
+        v
     }
 
     fn parse_block_table(&self) -> Vec<BlockEntry> {
         let blob = &self.raw[self.block_pos as usize..(self.block_pos + self.block_count * 16) as usize];
         let plain = decrypt(blob, hash_string("(block table)", HASH_FILE_KEY));
-        let mut v: Vec<BlockEntry> = (0..self.block_count as usize).map(|i| {
+        let v: Vec<BlockEntry> = (0..self.block_count as usize).map(|i| {
             let o = i * 16;
             BlockEntry { file_pos: u32at(&plain, o), cmp_size: u32at(&plain, o + 4),
                          file_size: u32at(&plain, o + 8), flags: u32at(&plain, o + 12) }
         }).collect();
-        let sane = v.iter().all(|b| !b.exists() || (b.file_pos as usize + b.cmp_size as usize) <= self.raw.len());
-        if !sane {
-            v = (0..self.block_count as usize).map(|i| {
-                let o = i * 16;
-                BlockEntry { file_pos: u32at(blob, o), cmp_size: u32at(blob, o + 4),
-                             file_size: u32at(blob, o + 8), flags: u32at(blob, o + 12) }
-            }).collect();
-        }
         v
     }
 
@@ -196,8 +178,8 @@ impl Archive {
         None
     }
 
-    /// Confirmed lookup: HET candidate first, verified against the BET name hash, and
-    /// probing continues on a mismatch (a HET slot holds only the top 8 bits).
+    /// Lookup through HET: candidate confirmed against the BET name hash, probing
+    /// continues on a mismatch.
     pub fn lookup_index(&self, name: &str) -> u32 {
         let het = match &self.het { Some(h) => h, None => return self.find_block(name).unwrap_or(HASH_ENTRY_FREE) };
         if het.entry_count == 0 { return HASH_ENTRY_FREE; }
@@ -509,9 +491,8 @@ pub fn build_document(entries: &[(String, Vec<u8>)], dest: &Path, opts: &BuildOp
     header[84..92].copy_from_slice(&0u64.to_le_bytes());
     header[92..100].copy_from_slice(&(het_blob.len() as u64).to_le_bytes());
     header[100..108].copy_from_slice(&(bet_blob.len() as u64).to_le_bytes());
-    // dwRawChunkSize: 0.  SC2's writer puts the v4-only 16384 here on a header that
-    // claims formatVersion 3, which turns on System_Mopaq raw-chunk MD5 verification
-    // and makes the editor reject every content edit as e_fileCorrupt.
+    // dwRawChunkSize must be 0; a non-zero value makes the editor reject content edits.
+    // See docs/DEV_FORMAT.md section 2.
     header[108..112].copy_from_slice(&opts.raw_chunk_size.to_le_bytes());
     header[0x70..0x80].copy_from_slice(&Md5::digest(&block_blob));
     header[0x80..0x90].copy_from_slice(&Md5::digest(&hash_blob));

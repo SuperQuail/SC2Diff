@@ -10,7 +10,7 @@
 
 - [ ] 目标分支正确（feat/* -> **dev**；只有 dev -> main；只有 main -> release）
 - [ ] CI 全绿
-- [ ] 本地跑过 `python tools/test_selftest.py`
+- [ ] 本地跑过 `cargo test --release` 与 `python tools/test_selftest.py`
 - [ ] 如涉及封装/容器改动，跑了 `python tools/test_rebuild.py` 与 `tools/editor_accept.py`，并把结论贴在下面
 - [ ] **没有提交任何游戏资源**（testdata/、reference/ 均在 .gitignore 中）
 - [ ] 没有把格式化改动与功能改动混在同一个提交里
