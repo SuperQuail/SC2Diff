@@ -8,12 +8,8 @@ use std::collections::BTreeMap;
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Kind { Xml, Text, Galaxy, Version, Binary }
-
-impl Default for Kind {
-    fn default() -> Self { Kind::Binary }
-}
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum Kind { Xml, Text, Galaxy, Version, #[default] Binary }
 
 pub fn classify(name: &str, data: &[u8]) -> Kind {
     let base = name.rsplit('\\').next().unwrap_or(name).rsplit('/').next().unwrap_or(name);
@@ -228,7 +224,7 @@ impl Change {
             && !self.binary_changed && self.lines_added == 0 && self.lines_removed == 0
     }
 
-    pub fn summary(&self, _name: &str) -> String {
+    pub fn summary(&self) -> String {
         if self.binary_changed { return format!("binary: {}", self.kind); }
         if self.lines_added > 0 || self.lines_removed > 0 {
             return format!("{}: +{} -{} lines", self.kind, self.lines_added, self.lines_removed);

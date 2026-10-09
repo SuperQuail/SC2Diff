@@ -1,15 +1,14 @@
 //! Reading and writing StarCraft II documents.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use md5::{Digest, Md5};
 
-use super::tables::{build_attributes, build_bet, build_het, Attributes, BetTable, HetTable,
-    BET_ENTRY_COUNT_I, BET_BIT_TOTAL_NAMEHASH2_I, BET_BIT_COUNT_NAMEHASH2_I};
+use super::tables::{build_attributes, build_bet, build_het, Attributes, BetTable, HetTable};
 use super::*;
 use crate::mpq::compress::{best_compress, decompress_chunk};
-use crate::mpq::crypto::{decrypt, encrypt, hash_string, jenkins_name_hash, bits_get};
+use crate::mpq::crypto::{decrypt, encrypt, hash_string};
 
 #[derive(Debug, Clone, Copy)]
 pub struct HashEntry {
@@ -37,11 +36,8 @@ impl BlockEntry {
 }
 
 pub struct Archive {
-    pub path: PathBuf,
     pub raw: Vec<u8>,
     pub header_size: u32,
-    pub archive_size: u64,
-    pub format_version: u16,
     pub block_shift: u16,
     pub hash_pos: u32,
     pub block_pos: u32,
@@ -76,16 +72,13 @@ impl Archive {
             return Err(MpqError(format!("not an MPQ archive: {}", path.display())));
         }
         let header_size = u32at(&raw, 4);
-        let archive_size = u32at(&raw, 8) as u64;
-        let format_version = u16at(&raw, 12);
         let block_shift = u16at(&raw, 14);
         let hash_pos = u32at(&raw, 16);
         let block_pos = u32at(&raw, 20);
         let hash_count = u32at(&raw, 24);
         let block_count = u32at(&raw, 28);
         let mut a = Archive {
-            path: path.to_path_buf(), raw, header_size, archive_size, format_version,
-            block_shift, hash_pos, block_pos, hash_count, block_count,
+            raw, header_size, block_shift, hash_pos, block_pos, hash_count, block_count,
             block_size: 512u32 << block_shift,
             bet_pos: 0,
             het_pos: 0, het_size: 0, bet_size: 0,
@@ -153,12 +146,11 @@ impl Archive {
     fn parse_block_table(&self) -> Vec<BlockEntry> {
         let blob = &self.raw[self.block_pos as usize..(self.block_pos + self.block_count * 16) as usize];
         let plain = decrypt(blob, hash_string("(block table)", HASH_FILE_KEY));
-        let v: Vec<BlockEntry> = (0..self.block_count as usize).map(|i| {
+        (0..self.block_count as usize).map(|i| {
             let o = i * 16;
             BlockEntry { file_pos: u32at(&plain, o), cmp_size: u32at(&plain, o + 4),
                          file_size: u32at(&plain, o + 8), flags: u32at(&plain, o + 12) }
-        }).collect();
-        v
+        }).collect()
     }
 
     /// Classic hash-table lookup (linear probing).
@@ -176,42 +168,6 @@ impl Archive {
             idx = (idx + 1) & (self.hash_count - 1);
         }
         None
-    }
-
-    /// Lookup through HET: candidate confirmed against the BET name hash, probing
-    /// continues on a mismatch.
-    pub fn lookup_index(&self, name: &str) -> u32 {
-        let het = match &self.het { Some(h) => h, None => return self.find_block(name).unwrap_or(HASH_ENTRY_FREE) };
-        if het.entry_count == 0 { return HASH_ENTRY_FREE; }
-        let want = jenkins_name_hash(name, het.name_hash_bit_size);
-        let name_hash1 = ((want >> (het.name_hash_bit_size - 8)) & 0xFF) as u8;
-        let start = (want % het.total_count as u64) as u32;
-        let mut index = start;
-        while het.name_hashes[index as usize] != HET_ENTRY_FREE {
-            if het.name_hashes[index as usize] == name_hash1 {
-                let bitpos = (het.index_size_total * index) as usize;
-                if (bitpos + het.index_size as usize + 7) / 8 <= het.index_bits.len() {
-                    let cand = bits_get(&het.index_bits, bitpos, het.index_size) as u32;
-                    if cand < self.block_count {
-                        match &self.bet {
-                            None => return cand,
-                            Some(bet) => {
-                                if (cand as usize) < bet.get(BET_ENTRY_COUNT_I) as usize {
-                                    let nh2 = bet.get(BET_BIT_TOTAL_NAMEHASH2_I);
-                                    let cnt = bet.get(BET_BIT_COUNT_NAMEHASH2_I);
-                                    let got = bits_get(&bet.name_hash_bits, (nh2 * cand) as usize, cnt);
-                                    let mask = if cnt >= 64 { u64::MAX } else { (1u64 << cnt) - 1 };
-                                    if want & mask == got { return cand; }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            index = (index + 1) % het.total_count;
-            if index == start { break; }
-        }
-        HASH_ENTRY_FREE
     }
 
     pub fn block_name(&self, index: u32) -> Option<&str> {
@@ -248,13 +204,6 @@ impl Archive {
     pub fn try_read(&self, name: &str) -> Option<Vec<u8>> {
         let i = self.find_block(name)?;
         self.read_block(i, name).ok()
-    }
-
-    pub fn read(&self, name: &str) -> Result<Vec<u8>> {
-        match self.find_block(name) {
-            Some(i) => self.read_block(i, name),
-            None => Err(MpqError(format!("no component named {name}"))),
-        }
     }
 
     pub fn verify_digests(&self) -> (bool, bool, bool, bool, bool) {
@@ -317,7 +266,6 @@ pub struct BuildOptions {
     pub attr_flags: u32,
     pub listfile: Option<Vec<u8>>,
     pub hints: HashMap<String, u32>,
-    pub raw_chunk_size: u32,
 }
 
 impl Default for BuildOptions {
@@ -325,21 +273,16 @@ impl Default for BuildOptions {
         BuildOptions {
             hash_count: None, block_shift: 5, unknown08: 0x10,
             attr_flags: ATTR_CRC32 | ATTR_MD5, listfile: None,
-            hints: HashMap::new(), raw_chunk_size: 0,
+            hints: HashMap::new(),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct BuildInfo {
-    pub path: String,
     pub bytes: usize,
     pub entries: usize,
     pub blocks: usize,
-    pub hash_entries: u32,
-    pub het_bytes: usize,
-    pub bet_bytes: usize,
-    pub block_size: u32,
 }
 
 fn pack_entries(entries: &[(String, Vec<u8>)], block_size: usize,
@@ -403,7 +346,7 @@ fn build_hash_table(names: &[String], count: u32) -> Vec<HashEntry> {
 
 pub fn build_document(entries: &[(String, Vec<u8>)], dest: &Path, opts: &BuildOptions) -> Result<BuildInfo> {
     let block_size = 512usize << opts.block_shift;
-    let mut user: Vec<(String, Vec<u8>)> = entries.iter()
+    let user: Vec<(String, Vec<u8>)> = entries.iter()
         .filter(|e| !is_bookkeeping(&e.0)).cloned().collect();
 
     let listfile: Vec<u8> = match &opts.listfile {
@@ -411,32 +354,25 @@ pub fn build_document(entries: &[(String, Vec<u8>)], dest: &Path, opts: &BuildOp
         None => user.iter().map(|e| e.0.clone()).collect::<Vec<_>>().join("\r\n").into_bytes()
                     .into_iter().chain("\r\n".bytes()).collect(),
     };
-    let mut working = user.clone();
-    working.push(("(listfile)".to_string(), listfile));
-
-    // pass 1: provisional attributes so the block is sized like the real one
-    let provisional = (working.len() + 1) + 1;
-    let _ = provisional;
-    let mut attrs = build_attributes(&vec![(0u32, 0u32, 0u32, 0u32); working.len() + 1],
-        &working.iter().map(|e| e.0.clone()).chain(std::iter::once("(attributes)".to_string())).collect::<Vec<_>>(),
-        opts.attr_flags, &working.iter().map(|e| e.1.clone()).chain(std::iter::once(Vec::new())).collect::<Vec<_>>());
-    let mut all = working.clone();
-    all.push(("(attributes)".to_string(), attrs.to_bytes()));
-
-    let (mut body, mut blocks) = pack_entries(&all, block_size, &opts.hints)?;
+    let mut all = user;
+    all.push(("(listfile)".to_string(), listfile));
+    all.push(("(attributes)".to_string(), Vec::new()));
+    let last = all.len() - 1;
     let names: Vec<String> = all.iter().map(|e| e.0.clone()).collect();
+
+    // (attributes) records its own file position, so seed it at the right size and iterate.
+    all[last].1 = build_attributes(&vec![(0u32, 0u32, 0u32, 0u32); all.len()], &names,
+                                   opts.attr_flags, &vec![Vec::new(); all.len()]).to_bytes();
+    let (mut body, mut blocks) = pack_entries(&all, block_size, &opts.hints)?;
     for _ in 0..4 {
-        attrs = build_attributes(&blocks, &names, opts.attr_flags,
-            &all.iter().map(|e| e.1.clone()).collect::<Vec<_>>());
-        let blob = attrs.to_bytes();
-        if all.last().map(|e| e.1.clone()).unwrap_or_default() == blob { break; }
-        let last = all.len() - 1;
+        let blob = build_attributes(&blocks, &names, opts.attr_flags,
+            &all.iter().map(|e| e.1.clone()).collect::<Vec<_>>()).to_bytes();
+        if all[last].1 == blob { break; }
         all[last].1 = blob;
         let packed = pack_entries(&all, block_size, &opts.hints)?;
         body = packed.0;
         blocks = packed.1;
     }
-    user.clear();
 
     let hash_count = opts.hash_count.unwrap_or_else(|| {
         let mut c = 4u32;
@@ -493,7 +429,7 @@ pub fn build_document(entries: &[(String, Vec<u8>)], dest: &Path, opts: &BuildOp
     header[100..108].copy_from_slice(&(bet_blob.len() as u64).to_le_bytes());
     // dwRawChunkSize must be 0; a non-zero value makes the editor reject content edits.
     // See docs/DEV_FORMAT.md section 2.
-    header[108..112].copy_from_slice(&opts.raw_chunk_size.to_le_bytes());
+    header[108..112].copy_from_slice(&0u32.to_le_bytes());
     header[0x70..0x80].copy_from_slice(&Md5::digest(&block_blob));
     header[0x80..0x90].copy_from_slice(&Md5::digest(&hash_blob));
     header[0xA0..0xB0].copy_from_slice(&Md5::digest(&bet_blob));
@@ -512,16 +448,7 @@ pub fn build_document(entries: &[(String, Vec<u8>)], dest: &Path, opts: &BuildOp
         if !parent.as_os_str().is_empty() { std::fs::create_dir_all(parent).ok(); }
     }
     std::fs::write(dest, &out).map_err(|e| MpqError(format!("{}: {e}", dest.display())))?;
-    Ok(BuildInfo {
-        path: dest.display().to_string(),
-        bytes: out.len(),
-        entries: all.len(),
-        blocks: blocks.len(),
-        hash_entries: hash_count,
-        het_bytes: het_blob.len(),
-        bet_bytes: bet_blob.len(),
-        block_size: block_size as u32,
-    })
+    Ok(BuildInfo { bytes: out.len(), entries: all.len(), blocks: blocks.len() })
 }
 
 #[cfg(test)]

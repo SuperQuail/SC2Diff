@@ -58,11 +58,6 @@ def _sha_file(path: str) -> str:
     return h.hexdigest()
 
 
-def _norm(name: str) -> str:
-    """Component name as stored in a document: backslash separated."""
-    return name.replace("/", "\\")
-
-
 class Repo:
     # ------------------------------------------------------------------ #
     # lifecycle
@@ -606,9 +601,6 @@ class Repo:
 
     def scan_uncached(self) -> dict:
         return {name: _sha_file(full) for name, full in self.walk_worktree()}
-
-    def _models(self, tree: dict) -> dict:
-        return {name: sc2semantic.canonical(name, self.get(sha)) for name, sha in tree.items()}
 
     def diff_trees(self, old: dict, new: dict) -> dict:
         changes = {}

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Round-trip oracle: parse a real SC2 document, regenerate its tables, compare bytes."""
-import sys, json, glob, os
+import sys, glob, os
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 sys.path.insert(0, 'tools')

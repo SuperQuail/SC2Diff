@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Exercise the git-shaped CLI end to end, the way an agent would drive it."""
-import json, os, re, shutil, subprocess, sys, xml.etree.ElementTree as ET
+import os, re, shutil, subprocess, sys, xml.etree.ElementTree as ET
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 import fixture

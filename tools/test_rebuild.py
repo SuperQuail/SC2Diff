@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Repack fidelity: unpack a real document, rebuild it from scratch, read it back, compare."""
-import sys, os, glob, hashlib, json
+import sys, os, glob
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.path.insert(0, 'tools')
 from sc2mpq import Document, MPQArchive

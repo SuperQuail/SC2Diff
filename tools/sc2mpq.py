@@ -301,30 +301,6 @@ class HetTable:
         enc = encrypt(body, hash_string("(hash table)", HASH_FILE_KEY))
         return HET_SIG + struct.pack("<II", 1, len(body)) + enc
 
-    def get_file_index(self, name: str) -> int:
-        """Resolve a name through the HET table alone.
-
-        HET entries only store the top 8 bits of the name hash, so a hit is a *candidate*;
-        StormLib and the SC2 engine then confirm it against the BET name hash.  Use
-        MPQArchive.lookup_index for the confirmed answer.
-        """
-        if self.entry_count == 0:
-            return HASH_ENTRY_FREE
-        fn_hash = jenkins_name_hash(name, self.name_hash_bit_size)
-        name_hash1 = (fn_hash >> (self.name_hash_bit_size - 8)) & 0xFF
-        start = index = fn_hash % self.total_count
-        while self.name_hashes[index] != HET_ENTRY_FREE:
-            if self.name_hashes[index] == name_hash1:
-                bitpos = self.index_size_total * index
-                if (bitpos + self.index_size + 7) // 8 <= len(self.index_bits):
-                    bi = bits_get(self.index_bits, bitpos, self.index_size)
-                    if bi != (1 << self.index_size) - 1:
-                        return bi
-            index = (index + 1) % self.total_count
-            if index == start:
-                break
-        return HASH_ENTRY_FREE
-
 
 @dataclass
 class BetTable:
@@ -483,27 +459,13 @@ class MPQArchive:
 
     def _parse_hash_table(self) -> list:
         blob = self.raw[self.hash_pos:self.hash_pos + self.hash_count * 16]
-        cand = decrypt(blob, hash_string("(hash table)", HASH_FILE_KEY))
-        entries = [HashEntry(*struct.unpack_from("<IIHHI", cand, i * 16)) for i in range(self.hash_count)]
-        ok = all(e.free or e.block_index < self.block_count for e in entries) and any(e.free for e in entries)
-        if not ok:
-            entries = [HashEntry(*struct.unpack_from("<IIHHI", blob, i * 16)) for i in range(self.hash_count)]
-        return entries
+        plain = decrypt(blob, hash_string("(hash table)", HASH_FILE_KEY))
+        return [HashEntry(*struct.unpack_from("<IIHHI", plain, i * 16)) for i in range(self.hash_count)]
 
     def _parse_block_table(self) -> list:
         blob = self.raw[self.block_pos:self.block_pos + self.block_count * 16]
-        cand = decrypt(blob, hash_string("(block table)", HASH_FILE_KEY))
-        entries = [BlockEntry(*struct.unpack_from("<IIII", cand, i * 16)) for i in range(self.block_count)]
-        ok = all((not e.exists) or (e.file_pos + e.cmp_size <= len(self.raw)) for e in entries)
-        if not ok:
-            entries = [BlockEntry(*struct.unpack_from("<IIII", blob, i * 16)) for i in range(self.block_count)]
-        return entries
-
-    def serialized_hash_table(self) -> bytes:
-        return encrypt(b"".join(e.pack() for e in self.hash_table), hash_string("(hash table)", HASH_FILE_KEY))
-
-    def serialized_block_table(self) -> bytes:
-        return encrypt(b"".join(e.pack() for e in self.block_table), hash_string("(block table)", HASH_FILE_KEY))
+        plain = decrypt(blob, hash_string("(block table)", HASH_FILE_KEY))
+        return [BlockEntry(*struct.unpack_from("<IIII", plain, i * 16)) for i in range(self.block_count)]
 
     # -- lookup ------------------------------------------------------------ #
     def find_block(self, name: str) -> int:
@@ -617,30 +579,6 @@ class MPQArchive:
             expected = min(self.block_size, b.file_size - len(out))
             out += _decompress_chunk(data[offsets[i]:offsets[i + 1]], expected)
         return bytes(out)
-
-    def extract_all(self, dest: str, verbose=False) -> list:
-        os.makedirs(dest, exist_ok=True)
-        written = []
-        for i in range(self.block_count):
-            if not self.block_table[i].exists:
-                continue
-            name = self.block_name(i)
-            if not name:
-                continue
-            try:
-                data = self.read_block(i, name)
-            except Exception as exc:
-                if verbose:
-                    print("  ! %s: %s" % (name, exc))
-                continue
-            target = os.path.join(dest, name.replace("\\", os.sep))
-            parent = os.path.dirname(target)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            with open(target, "wb") as fh:
-                fh.write(data)
-            written.append(name)
-        return written
 
     # -- verification ------------------------------------------------------ #
     def verify(self, deep=True) -> dict:

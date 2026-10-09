@@ -137,7 +137,7 @@ impl Repo {
             config.source = Some(src.display().to_string());
             config.hash_count = Some(archive.hash_count);
             config.block_shift = archive.block_shift;
-            config.unknown08 = archive.bet.as_ref().map(|b| b.get(crate::mpq::BET_UNKNOWN08_I)).unwrap_or(0x10);
+            config.unknown08 = archive.bet.as_ref().map(|b| b.head[crate::mpq::BET_UNKNOWN08_I]).unwrap_or(0x10);
             config.attr_flags = archive.attributes.as_ref().map(|a| a.flags).unwrap_or(default_attr_flags());
             config.listfile = archive.try_read("(listfile)").map(|l| String::from_utf8_lossy(&l).to_string());
             let doc = Document::open(src)?;
@@ -564,10 +564,10 @@ impl Repo {
         Ok(out)
     }
 
-    /// Working tree vs index (or vs HEAD).  The working side is read from disk: a modified
-    /// file is not a blob until it is staged.
-    pub fn diff_working(&self, vs_head: bool) -> Result<Vec<(String, semantic::Change)>> {
-        let base = if vs_head { self.commit_tree(&self.head_commit()) } else { self.index_tree() };
+    /// Working tree vs index.  The working side is read from disk: a modified file is not
+    /// a blob until it is staged.
+    pub fn diff_working(&self) -> Result<Vec<(String, semantic::Change)>> {
+        let base = self.index_tree();
         let work = self.scan()?;
         let mut out = Vec::new();
         for name in base.keys().chain(work.keys()).collect::<BTreeSet<_>>() {
@@ -661,9 +661,9 @@ impl Repo {
         Ok(())
     }
 
-    pub fn create_tag(&self, name: &str, rev: Option<&str>, force: bool) -> Result<String> {
+    pub fn create_tag(&self, name: &str, rev: Option<&str>) -> Result<String> {
         let refname = format!("refs/tags/{name}");
-        if self.read_ref(&refname).is_some() && !force { return err(format!("tag {name} already exists")); }
+        if self.read_ref(&refname).is_some() { return err(format!("tag {name} already exists")); }
         let sha = match rev { Some(r) => self.resolve(r)?, None => self.head_commit().ok_or_else(|| RepoError("cannot tag before the first commit".into()))? };
         self.write_ref(&refname, &sha)?;
         Ok(sha)
@@ -693,7 +693,6 @@ impl Repo {
             attr_flags: self.config.attr_flags,
             listfile,
             hints: self.config.layout_hints.clone(),
-            raw_chunk_size: 0,
         };
         Ok(mpq::build_document(&entries, dest, &opts)?)
     }
@@ -714,7 +713,8 @@ impl Repo {
     // -- bundles ---------------------------------------------------------- //
     pub fn bundle(&self, dest: &Path, refs: &[String], basis: &[String]) -> Result<serde_json::Value> {
         let refs = if refs.is_empty() {
-            vec![self.current_branch().is_empty().then(|| "HEAD".to_string()).unwrap_or(self.current_branch())]
+            let branch = self.current_branch();
+            vec![if branch.is_empty() { "HEAD".to_string() } else { branch }]
         } else { refs.to_vec() };
         let mut ref_shas: BTreeMap<String, String> = BTreeMap::new();
         for r in &refs { ref_shas.insert(r.clone(), self.resolve(r)?); }
@@ -788,11 +788,13 @@ impl Repo {
             .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
         let mut imported_objects = 0;
         for name in &object_names {
+            if self.has_object(name) { continue; }
             let mut data = Vec::new();
-            if let Ok(mut f) = z.by_name(&format!("objects/{name}")) {
-                f.read_to_end(&mut data).map_err(|e| RepoError(e.to_string()))?;
-                if !self.has_object(name) { self.put(&data)?; imported_objects += 1; }
-            }
+            z.by_name(&format!("objects/{name}"))
+                .map_err(|_| RepoError(format!("{} is missing object {name}", path.display())))?
+                .read_to_end(&mut data).map_err(|e| RepoError(e.to_string()))?;
+            self.put(&data)?;
+            imported_objects += 1;
         }
         let commit_names: Vec<String> = manifest.get("commits").and_then(|o| o.as_array())
             .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
