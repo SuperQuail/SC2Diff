@@ -1,9 +1,8 @@
 //! Semantic, order-independent diff for document components.
 //!
-//! The editor rewrites a component wholesale and sibling order carries no meaning, so a
-//! text diff reports enormous churn for a one-field edit.  Every component is instead
-//! reduced to an identity-keyed model (placed objects by Id, triggers by Id, catalog
-//! entries by tag+id, localised text by key) and compared as maps.
+//! Components are reduced to identity-keyed models (placed objects by Id, triggers by Id,
+//! catalog entries by tag+id, localised text by key) and compared as maps, so element
+//! order and formatting do not affect the result.
 
 use std::collections::BTreeMap;
 use quick_xml::events::Event;

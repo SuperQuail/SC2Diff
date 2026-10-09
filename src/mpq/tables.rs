@@ -1,10 +1,8 @@
 //! HET / BET / (attributes) tables.
 //!
-//! Layouts measured on real documents; two details are easy to get wrong and both were:
-//!   * the BET flag array is stored little-endian in SC2 output (StormLib's BSWAP does
-//!     not hold here -- following it yields values like 0x00020081)
-//!   * a HET slot only stores the top 8 bits of the name hash, so a hit is a candidate
-//!     that must be confirmed against the BET name hash, and probing continues on a miss
+//! The BET flag array is stored little-endian.  A HET slot holds only the top 8 bits of the
+//! name hash, so a hit is a candidate that must be confirmed against the BET name hash;
+//! probing continues on a mismatch.
 
 use super::*;
 use crate::mpq::crypto::{bits_get, bits_set, decrypt, encrypt, hash_string, jenkins_name_hash};
@@ -350,8 +348,8 @@ pub fn build_bet(blocks: &[(u32, u32, u32, u32)], names: &[String],
     BetTable { head, flags: flag_array, file_bits, name_hash_bits: hash_bits }
 }
 
-/// Per-block CRC32 / MD5.  Measured convention on real documents: the (listfile) and
-/// (attributes) entries carry an all-zero MD5 and (attributes) carries a zero CRC32.
+/// Per-block CRC32 / MD5.  (listfile) and (attributes) carry an all-zero MD5, and
+/// (attributes) carries a zero CRC32.
 pub fn build_attributes(blocks: &[(u32, u32, u32, u32)], names: &[String],
                         flags: u32, datas: &[Vec<u8>]) -> Attributes {
     use md5::{Digest, Md5};

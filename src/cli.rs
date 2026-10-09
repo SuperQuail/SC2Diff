@@ -1,7 +1,4 @@
-//! git-shaped command line front end.
-//!
-//! Command names, flags and output shapes deliberately mirror git, so an agent that knows
-//! git does not have to learn a second dialect.
+//! Command line front end.  Command names, flags and output follow git.
 
 use std::path::PathBuf;
 

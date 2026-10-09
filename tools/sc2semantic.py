@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 """sc2semantic -- order-independent, identity-keyed diff for StarCraft II document components.
 
-Why not a byte or line diff: the editor rewrites a component wholesale, and the order of
-sibling elements is not meaningful (placed objects appear in placement order, trigger items
-in tree order, catalog fields in whatever order they were touched).  A line diff therefore
-reports enormous churn for a one-field edit.
-
-This module gives every component a canonical model keyed by *identity*:
+The editor rewrites a component wholesale and sibling order is not meaningful, so a line
+diff reports large churn for a one-field edit.  Every component gets a canonical model
+keyed by identity:
 
   Objects                     <PlacedObjects>  entity = Id              (ObjectUnit / ObjectDoodad)
   Triggers                    <TriggerData>    entity = Id              (Element) + Root items
@@ -16,7 +13,7 @@ This module gives every component a canonical model keyed by *identity*:
   *.galaxy, PreloadAssetDB.txt                 normalized lines
   DocumentHeader, t3*, assets                  binary (hash + size + hex preview)
 
-Every model is a plain dict, so diffing is a dict comparison that ignores ordering entirely.
+Models are plain dicts, so diffing is a dict comparison and ignores ordering.
 """
 from __future__ import annotations
 

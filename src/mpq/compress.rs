@@ -1,7 +1,7 @@
-//! Multi-compression masks used by StarCraft II documents.
+//! Component compression.
 //!
-//! Measured on real archives: bzip2 (0x10) dominates, zlib (0x02) appears too, and blocks
-//! flagged COMPRESS but stored verbatim are signalled by cmp_size == file_size.
+//! 0x02 is zlib, 0x10 is bzip2.  A block flagged COMPRESS whose cmp_size equals its
+//! file_size is stored verbatim.
 
 use std::io::{Read, Write};
 

@@ -1,8 +1,6 @@
-//! Git-shaped repository engine over unpacked document components.
+//! Repository engine: working tree, object store, index, refs, bundles and packing.
 //!
-//! Layout mirrors git on purpose (objects/, refs/, HEAD, an index that doubles as a stat
-//! cache) so agent habits transfer.  Everything SC2-specific is separated out: the working
-//! tree holds document components, and pack/unpack bridge to the MPQ container.
+//! The working tree holds document components; pack/unpack bridge to the MPQ container.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{Read, Write};
@@ -416,9 +414,7 @@ impl Repo {
         seen
     }
 
-    /// Best common ancestor, chosen by graph order rather than timestamps (commits made in
-    /// the same second would otherwise pick the repository root and turn a fast-forwardable
-    /// update into a bogus divergence).
+    /// Best common ancestor, ordered by graph position rather than commit time.
     pub fn merge_base(&self, a: &str, b: &str) -> Option<String> {
         let aa = self.ancestors(a);
         let ab = self.ancestors(b);
@@ -569,7 +565,7 @@ impl Repo {
     }
 
     /// Working tree vs index (or vs HEAD).  The working side is read from disk: a modified
-    /// file has been hashed but is not a blob until it is staged.
+    /// file is not a blob until it is staged.
     pub fn diff_working(&self, vs_head: bool) -> Result<Vec<(String, semantic::Change)>> {
         let base = if vs_head { self.commit_tree(&self.head_commit()) } else { self.index_tree() };
         let work = self.scan()?;

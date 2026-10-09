@@ -33,9 +33,7 @@ pub fn hash_string(text: &str, hash_type: u32) -> u32 {
     let table = crypt_table();
     let mut seed1: u32 = 0x7FED_7FED;
     let mut seed2: u32 = 0xEEEE_EEEE;
-    // NOTE: no mask here.  The table has 0x500 entries and (hash_type << 8) + byte is
-    // always < 0x500 for the hash types MPQ uses; masking with 0x4FF silently clears bit 8
-    // and makes every hash_type != 0 collapse onto hash_type 0.
+    // No mask: the table has 0x500 entries and (hash_type << 8) + byte stays below that.
     let base = (hash_type as usize) << 8;
     for byte in text.to_uppercase().bytes() {
         let idx = base + byte as usize;
@@ -49,8 +47,8 @@ pub fn hash_string(text: &str, hash_type: u32) -> u32 {
     seed1
 }
 
-/// MPQ block cipher.  Only whole 32-bit words are processed; a trailing 1-3 bytes are
-/// stored verbatim by the writer and must be preserved (dropping them truncates HET).
+/// MPQ block cipher.  Only whole 32-bit words are processed; trailing bytes are copied
+/// through unchanged.
 pub fn decrypt(data: &[u8], key: u32) -> Vec<u8> {
     let table = crypt_table();
     let mut seed1 = key;
